@@ -1,0 +1,2986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SENTRI // Cyber Threat Operations Center</title>
+  
+  <!-- CDNs for D3, Chart.js and Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    /* DESIGN SYSTEM DEFINITIONS */
+    :root {
+      --bg-void: #03060F;           /* deepest background */
+      --bg-surface: #080D1A;        /* card/panel background */
+      --bg-elevated: #0D1526;       /* elevated elements */
+      --bg-hover: #111D33;          /* hover state */
+      --border-dim: #1A2540;        /* subtle borders */
+      --border-glow: #1E3A5F;       /* glowing borders */
+      
+      --critical: #FF2D55;          /* CRITICAL severity */
+      --critical-glow: rgba(255, 45, 85, 0.15);
+      --high: #FF6B1A;              /* HIGH severity */
+      --high-glow: rgba(255, 107, 26, 0.12);
+      --medium: #F59E0B;            /* MEDIUM severity */
+      --medium-glow: rgba(245, 158, 11, 0.12);
+      --low: #10B981;               /* LOW / resolved */
+      --low-glow: rgba(16, 185, 129, 0.10);
+      --info: #38BDF8;              /* informational */
+      
+      --text-primary: #E8EDF5;      /* main text */
+      --text-secondary: #7A8BA8;    /* secondary/muted */
+      --text-mono: #64D9A8;         /* monospaced data (matrix green-teal) */
+      --text-dim: #3D4E6B;          /* very dim text */
+      
+      --accent-electric: #00D4FF;   /* electric blue accent */
+      --accent-pulse: rgba(0, 212, 255, 0.08);
+      
+      --font-display: 'Rajdhani', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    /* GENERAL RESET */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-glow) transparent;
+    }
+
+    body {
+      background-color: var(--bg-void);
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 14px;
+      line-height: 1.4;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      position: relative;
+    }
+
+    /* GRID BACKGROUND */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(var(--border-dim) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-dim) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.3;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* CUSTOM SCROLLBARS */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-glow);
+      border-radius: 2px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .text-mono {
+      font-family: var(--font-mono) !important;
+      font-size: 12px !important;
+      color: var(--text-mono);
+    }
+
+    /* MAIN APP CONTAINER */
+    .app-container {
+      display: grid;
+      grid-template-rows: 56px 1fr;
+      height: 100vh;
+      width: 100vw;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* TOP BAR */
+    .topbar {
+      grid-row: 1;
+      height: 56px;
+      background-color: var(--bg-surface);
+      border-bottom: 1px solid var(--border-dim);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      user-select: none;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-icon {
+      font-size: 20px;
+      color: var(--accent-electric);
+      text-shadow: 0 0 15px var(--accent-electric);
+    }
+
+    .logo-text {
+      font-weight: 700;
+      font-size: 22px;
+      color: var(--accent-electric);
+      text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+      letter-spacing: 0.05em;
+    }
+
+    .status-beacon-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-left: 15px;
+      border-left: 1px solid var(--border-dim);
+    }
+
+    .status-beacon {
+      width: 10px;
+      height: 10px;
+      background-color: var(--critical);
+      border-radius: 50%;
+      position: relative;
+      box-shadow: 0 0 8px var(--critical);
+      animation: beacon-pulse 1.5s infinite;
+    }
+
+    .status-text {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--critical);
+      letter-spacing: 0.05em;
+      text-shadow: 0 0 8px rgba(255, 45, 85, 0.4);
+    }
+
+    .topbar-center {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .severity-pill {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .severity-pill.crit {
+      background-color: var(--critical-glow);
+      color: var(--critical);
+      border: 1px solid rgba(255, 45, 85, 0.3);
+    }
+    .severity-pill.high {
+      background-color: var(--high-glow);
+      color: var(--high);
+      border: 1px solid rgba(255, 107, 26, 0.3);
+    }
+    .severity-pill.med {
+      background-color: var(--medium-glow);
+      color: var(--medium);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .severity-pill.low {
+      background-color: var(--low-glow);
+      color: var(--low);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .utc-clock {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-mono);
+      border-right: 1px solid var(--border-dim);
+      padding-right: 15px;
+    }
+
+    .user-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background-color: var(--bg-elevated);
+      border: 1px solid var(--border-dim);
+      padding: 4px 12px;
+      border-radius: 4px;
+    }
+
+    .user-avatar {
+      color: var(--accent-electric);
+      font-size: 12px;
+    }
+
+    .user-title {
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--text-primary);
+    }
+
+    /* GRID WORKSPACE LAYOUT */
+    .workspace {
+      grid-row: 2;
+      display: grid;
+      grid-template-columns: 300px 1fr 360px;
+      height: calc(100vh - 56px);
+      overflow: hidden;
+    }
+
+    /* SIDEBARS AND PANELS */
+    .left-sidebar {
+      grid-column: 1;
+      border-right: 1px solid var(--border-dim);
+      background-color: var(--bg-surface);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .panel-block {
+      border-bottom: 1px solid var(--border-dim);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .panel-title {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(26, 37, 64, 0.4);
+      background-color: rgba(3, 6, 15, 0.4);
+    }
+
+    .panel-content {
+      padding: 14px 16px;
+      position: relative;
+    }
+
+    /* DONUT THREAT SCORE */
+    .donut-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 0;
+      position: relative;
+    }
+
+    .score-donut {
+      transform: rotate(-90deg);
+    }
+
+    .donut-bg {
+      stroke: var(--border-dim);
+    }
+
+    .donut-fill {
+      stroke-linecap: round;
+      animation: ringFill 1.5s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+    }
+
+    .score-overlay {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .score-number {
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--critical);
+      line-height: 1;
+      text-shadow: 0 0 15px rgba(255, 45, 85, 0.4);
+    }
+
+    .score-desc {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.05em;
+      margin-top: 2px;
+    }
+
+    /* SEVERITY BREAKDOWN BARS */
+    .bar-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 9px;
+      gap: 12px;
+    }
+    .bar-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .bar-label {
+      width: 60px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.05em;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 6px;
+      background-color: var(--bg-void);
+      border: 1px solid var(--border-dim);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 3px;
+      animation: barFill 1.2s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+      animation-delay: 0.3s;
+    }
+
+    .bar-fill.crit-bar { background-color: var(--critical); box-shadow: 0 0 8px var(--critical); }
+    .bar-fill.high-bar { background-color: var(--high); box-shadow: 0 0 8px var(--high); }
+    .bar-fill.med-bar { background-color: var(--medium); box-shadow: 0 0 8px var(--medium); }
+    .bar-fill.low-bar { background-color: var(--low); box-shadow: 0 0 8px var(--low); }
+
+    .bar-value {
+      width: 20px;
+      text-align: right;
+      font-size: 11px;
+      color: var(--text-primary);
+    }
+
+    /* WORLD GEOGRAPHIC MAP */
+    .mini-map-svg {
+      width: 100%;
+      display: block;
+    }
+
+    .ping-ring {
+      transform-origin: center;
+      animation: mapRingPulse 1.5s ease-out infinite;
+    }
+    .ping-ring-blue {
+      transform-origin: center;
+      animation: mapRingPulse 1.8s ease-out infinite;
+    }
+
+    @keyframes mapRingPulse {
+      0% { r: 2; opacity: 1; }
+      100% { r: 10; opacity: 0; }
+    }
+
+    .map-connection {
+      stroke-dasharray: 4 4;
+      animation: mapLineFlow 1.2s linear infinite;
+    }
+    @keyframes mapLineFlow {
+      to { stroke-dashoffset: -20; }
+    }
+
+    /* MITRE LIST */
+    .mitre-coverage-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .mitre-row {
+      font-size: 12px;
+      font-weight: 500;
+      display: grid;
+      grid-template-columns: 16px 1fr auto;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mitre-indicator {
+      font-weight: 700;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .mitre-indicator.red-act { color: var(--critical); text-shadow: 0 0 5px var(--critical); }
+    .mitre-indicator.orange-act { color: var(--high); text-shadow: 0 0 5px var(--high); }
+
+    .mitre-code {
+      font-size: 11px;
+    }
+
+    /* SIDEBAR SYSTEM ACTIONS */
+    .sidebar-actions {
+      margin-top: auto;
+      border-bottom: none;
+    }
+
+    .actions-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .action-btn {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      padding: 10px;
+      border-radius: 20px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.25s ease;
+      outline: none;
+      text-align: center;
+    }
+
+    .btn-isolate {
+      background-color: var(--critical);
+      color: var(--text-primary);
+      box-shadow: 0 0 10px rgba(255, 45, 85, 0.3);
+    }
+    .btn-isolate:hover {
+      background-color: #ff4a6e;
+      box-shadow: 0 0 15px rgba(255, 45, 85, 0.6);
+    }
+
+    .btn-revoke {
+      background-color: var(--high);
+      color: var(--text-primary);
+      box-shadow: 0 0 10px rgba(255, 107, 26, 0.3);
+    }
+    .btn-revoke:hover {
+      background-color: #ff843f;
+      box-shadow: 0 0 15px rgba(255, 107, 26, 0.6);
+    }
+
+    .btn-export {
+      background-color: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-dim);
+    }
+    .btn-export:hover {
+      background-color: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--border-glow);
+    }
+
+    /* CENTER WORKSPACE PANELS */
+    .center-workspace {
+      grid-column: 2;
+      display: grid;
+      grid-template-rows: 55% 45%;
+      height: 100%;
+      border-right: 1px solid var(--border-dim);
+      overflow: hidden;
+    }
+
+    /* LIVE THREAT FEED */
+    .threat-feed-block {
+      grid-row: 1;
+      border-bottom: 1px solid var(--border-dim);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header-filter {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 16px;
+      height: 38px;
+      border-bottom: 1px solid var(--border-dim);
+      background-color: rgba(3, 6, 15, 0.4);
+      user-select: none;
+    }
+
+    .filter-label {
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--text-primary);
+      letter-spacing: 0.05em;
+    }
+
+    .filter-options {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .filter-pill {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 11px;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      padding: 4px 8px;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      position: relative;
+      transition: color 0.2s ease;
+    }
+
+    .filter-pill:hover, .filter-pill.active {
+      color: var(--accent-electric);
+    }
+
+    .filter-pill.active::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 8px;
+      right: 8px;
+      height: 2px;
+      background-color: var(--accent-electric);
+      box-shadow: 0 0 6px var(--accent-electric);
+    }
+
+    .filter-reset-badge {
+      display: none;
+      background-color: var(--bg-elevated);
+      border: 1px solid var(--border-glow);
+      color: var(--accent-electric);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+
+    .alert-cards-feed {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* CARD STRUCTURE */
+    .alert-card {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-dim);
+      border-radius: 6px;
+      padding: 12px 14px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      transform: translateX(0);
+      opacity: 1;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+      animation: slideInRight 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+    }
+
+    .alert-card:hover {
+      background-color: var(--bg-hover);
+      border-color: var(--border-glow);
+    }
+
+    .alert-card.selected {
+      border-color: var(--accent-electric);
+      box-shadow: inset 3px 0 0 var(--accent-electric), 0 0 12px rgba(0, 212, 255, 0.15);
+      background-color: var(--bg-elevated);
+    }
+
+    .alert-card.crit-card { border-left: 3px solid var(--critical); }
+    .alert-card.high-card { border-left: 3px solid var(--high); }
+    .alert-card.med-card { border-left: 3px solid var(--medium); }
+    .alert-card.low-card { border-left: 3px solid var(--low); }
+
+    .alert-card.crit-card.is-critical-event {
+      background-color: var(--critical-glow);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+    }
+
+    .card-meta-left {
+      display: flex;
+      align-items: center;
+    }
+
+    .card-severity {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 3px;
+      letter-spacing: 0.05em;
+    }
+
+    .crit-card .card-severity { background-color: rgba(255, 45, 85, 0.2); color: var(--critical); }
+    .high-card .card-severity { background-color: rgba(255, 107, 26, 0.2); color: var(--high); }
+    .med-card .card-severity { background-color: rgba(245, 158, 11, 0.2); color: var(--medium); }
+    .low-card .card-severity { background-color: rgba(16, 185, 129, 0.2); color: var(--low); }
+
+    .card-separator {
+      color: var(--border-dim);
+      padding: 0 6px;
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .card-id {
+      color: var(--text-secondary);
+    }
+
+    .card-category {
+      font-weight: 600;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+    }
+
+    .card-time {
+      color: var(--text-secondary);
+    }
+
+    .card-title {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text-primary);
+      letter-spacing: 0.01em;
+      line-height: 1.25;
+      padding: 2px 0;
+    }
+
+    .card-routing {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-ip {
+      color: var(--text-mono);
+    }
+
+    .card-arrow {
+      color: var(--text-dim);
+      font-size: 10px;
+    }
+
+    .card-target {
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .card-bottom-tags {
+      display: flex;
+      gap: 6px;
+      user-select: none;
+    }
+
+    .card-mitre-tag {
+      background-color: var(--bg-void);
+      border: 1px solid var(--border-dim);
+      color: var(--text-secondary);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .card-mitre-tag span {
+      color: var(--critical);
+    }
+
+    .pulse-new-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background-color: var(--accent-electric);
+      color: var(--bg-void);
+      font-size: 8px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 2px;
+      letter-spacing: 0.05em;
+      animation: blink 1.2s infinite;
+    }
+
+    /* D3 FORCE GRAPH Visualizer */
+    .attack-graph-block {
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background-color: rgba(5, 8, 22, 0.4);
+      position: relative;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Maximized Class for Overlay dimensions */
+    .attack-graph-block.maximized {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      width: 100vw;
+      height: 100vh;
+      background-color: var(--bg-void);
+      border: none;
+      border-radius: 0;
+    }
+
+    .graph-panel-header {
+      padding: 10px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-dim);
+      background-color: rgba(3, 6, 15, 0.4);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .graph-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-max-toggle {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 10px;
+      background: none;
+      border: 1px solid var(--border-glow);
+      color: var(--accent-electric);
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-max-toggle:hover {
+      background-color: var(--accent-pulse);
+      border-color: var(--accent-electric);
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+    }
+
+    .graph-wrapper {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #attack-chain-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    #attack-chain-svg:active {
+      cursor: grabbing;
+    }
+
+    /* D3 node elements styling */
+    .graph-node {
+      cursor: pointer;
+      transition: stroke 0.2s ease;
+    }
+
+    .node-text {
+      fill: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      pointer-events: none;
+      text-anchor: middle;
+      paint-order: stroke fill;
+      stroke: var(--bg-void);
+      stroke-width: 3px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      font-weight: 500;
+    }
+
+    .graph-edge {
+      stroke-dasharray: 200;
+      stroke-dashoffset: 200;
+      animation: drawEdge 1.8s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+      animation-delay: 0.6s;
+      transition: stroke-width 0.2s;
+    }
+
+    .edge-label {
+      font-family: var(--font-mono);
+      font-size: 7px;
+      fill: var(--text-secondary);
+      pointer-events: none;
+      text-shadow: 0 1px 2px rgba(3, 6, 15, 0.9);
+      transition: opacity 0.2s ease;
+    }
+
+    /* Node glows */
+    .node-pulse-crit {
+      animation: nodeGlowCrit 2s infinite ease-in-out;
+    }
+
+    /* Graph tooltip */
+    .graph-tooltip {
+      position: absolute;
+      background-color: var(--bg-elevated);
+      border: 1px solid var(--border-glow);
+      padding: 8px 12px;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      z-index: 1000; /* Increased to lay on top of fullscreen overlay */
+      font-family: var(--font-mono);
+      font-size: 11px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      max-width: 250px;
+    }
+
+    .tooltip-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--accent-electric);
+      margin-bottom: 4px;
+      border-bottom: 1px solid var(--border-dim);
+      padding-bottom: 2px;
+    }
+
+    .tooltip-row {
+      margin-bottom: 3px;
+      color: var(--text-secondary);
+    }
+    .tooltip-row span {
+      color: var(--text-primary);
+    }
+
+    /* RIGHT SIDEBAR PANEL (Changed to flexible scroll layout to prevent vertical clipping) */
+    .right-sidebar {
+      grid-column: 3;
+      background-color: var(--bg-surface);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* AI EXPLANATION BLOCK */
+    .ai-explanation-block {
+      flex: 1 0 auto;
+      min-height: 440px; /* Natural min height limits */
+      border-bottom: 1px solid var(--border-dim);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* CRT scanline simulation overlay */
+    .ai-explanation-block::after {
+      content: " ";
+      display: block;
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+      z-index: 2;
+      background-size: 100% 3px, 3px 100%;
+      pointer-events: none;
+    }
+
+    .crt-scanline-beam {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.03);
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.03);
+      z-index: 3;
+      pointer-events: none;
+      animation: scanline 4s linear infinite;
+    }
+
+    .ai-scroll-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 1;
+    }
+
+    .ai-default-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      gap: 10px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .ai-default-icon {
+      font-size: 28px;
+      color: var(--text-dim);
+      opacity: 0.5;
+    }
+
+    .ai-default-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 14px;
+      background-color: var(--accent-electric);
+      box-shadow: 0 0 6px var(--accent-electric);
+      margin-left: 4px;
+      vertical-align: middle;
+      animation: blink 1s step-end infinite;
+    }
+
+    .ai-active-panel {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .ai-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-dim);
+      padding-bottom: 8px;
+    }
+
+    .ai-header-id {
+      font-family: var(--font-mono);
+      font-weight: 500;
+      color: var(--accent-electric);
+    }
+
+    .ai-section-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-primary);
+      border-left: 2px solid var(--accent-electric);
+      padding-left: 8px;
+      margin-bottom: 6px;
+    }
+
+    .ai-summary-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      min-height: 40px;
+    }
+
+    /* Attack context timeline */
+    .timeline-vertical {
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      padding-left: 14px;
+      margin-top: 8px;
+    }
+
+    .timeline-vertical::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 6px;
+      bottom: 6px;
+      width: 1px;
+      background-color: var(--border-dim);
+    }
+
+    .timeline-node-item {
+      position: relative;
+      padding-bottom: 12px;
+      cursor: pointer;
+    }
+
+    .timeline-node-item:last-child {
+      padding-bottom: 0;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -13px;
+      top: 5px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: var(--border-glow);
+      border: 1px solid var(--bg-surface);
+      transition: background-color 0.2s;
+    }
+
+    .timeline-node-item:hover .timeline-dot, .timeline-node-item.active .timeline-dot {
+      background-color: var(--accent-electric);
+      box-shadow: 0 0 6px var(--accent-electric);
+    }
+
+    .timeline-item-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      margin-bottom: 2px;
+    }
+
+    .timeline-item-id {
+      color: var(--text-mono);
+    }
+    .timeline-item-time {
+      color: var(--text-dim);
+    }
+
+    .timeline-item-title {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .timeline-node-item:hover .timeline-item-title, .timeline-node-item.active .timeline-item-title {
+      color: var(--text-primary);
+    }
+
+    /* Threat Intel fields */
+    .intel-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background-color: rgba(3, 6, 15, 0.4);
+      border: 1px solid var(--border-dim);
+      padding: 12px;
+      border-radius: 4px;
+    }
+
+    .intel-row {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      align-items: center;
+      font-size: 12px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(26, 37, 64, 0.3);
+    }
+    .intel-row:last-child {
+      border-bottom: none;
+    }
+
+    .intel-row-lbl {
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .intel-row-val {
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .risk-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      display: inline-block;
+      float: right;
+    }
+
+    .risk-badge.crit-risk { background-color: rgba(255, 45, 85, 0.2); color: var(--critical); }
+    .risk-badge.high-risk { background-color: rgba(255, 107, 26, 0.2); color: var(--high); }
+    .risk-badge.med-risk { background-color: rgba(245, 158, 11, 0.2); color: var(--medium); }
+    .risk-badge.low-risk { background-color: rgba(16, 185, 129, 0.2); color: var(--low); }
+
+    /* Recommended Actions Block */
+    .recs-block {
+      background-color: rgba(245, 158, 11, 0.05);
+      border-left: 3px solid var(--medium);
+      padding: 12px 14px;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .recs-title {
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--medium);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .recs-text {
+      font-size: 12px;
+      color: #ffd88f;
+      line-height: 1.4;
+    }
+
+    /* STATS HISTORY BLOCK */
+    .stats-history-block {
+      flex: 0 0 auto;
+      min-height: 310px; /* Comfortable height */
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-top: 1px solid var(--border-dim); /* Structured top dividing border */
+    }
+
+    .stats-grid-2x2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 8px;
+      padding: 14px;
+      border-bottom: 1px solid var(--border-dim);
+      background-color: rgba(3, 6, 15, 0.2);
+    }
+
+    .stat-card {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-dim);
+      border-radius: 4px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      letter-spacing: 0.05em;
+    }
+
+    .stat-val-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.1;
+    }
+
+    .stat-value.crit-text { color: var(--critical); }
+    .stat-value.green-text { color: var(--low); }
+
+    .stat-sparkline {
+      width: 45px;
+      height: 16px;
+    }
+
+    .stats-chart-wrapper {
+      flex: 1;
+      padding: 10px 14px 16px 14px; /* Increased bottom padding */
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chart-title-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .stats-chart-wrapper canvas {
+      flex: 1;
+      max-height: 100px;
+      width: 100% !important;
+    }
+
+    /* FULLSCREEN OVERLAY MODAL */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(3, 6, 15, 0.9);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s ease;
+    }
+
+    .modal-content {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--critical);
+      box-shadow: 0 0 30px rgba(255, 45, 85, 0.3);
+      padding: 30px;
+      border-radius: 8px;
+      text-align: center;
+      max-width: 500px;
+      width: 90%;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .modal-checkmark-svg {
+      width: 60px;
+      height: 60px;
+      stroke: var(--low);
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    .modal-checkmark-circle {
+      stroke-dasharray: 188.4;
+      stroke-dashoffset: 188.4;
+      animation: checkCircle 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    .modal-checkmark-check {
+      stroke-dasharray: 60;
+      stroke-dashoffset: 60;
+      animation: checkCheck 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      animation-delay: 0.5s;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--critical);
+      letter-spacing: 0.05em;
+    }
+
+    .modal-text {
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+
+    /* ANIMATIONS DEFINITIONS */
+    @keyframes beacon-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(255, 45, 85, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0); }
+    }
+
+    @keyframes slideInRight {
+      from { transform: translateX(20px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes ringFill {
+      from { stroke-dashoffset: 439.8; }
+      to { stroke-dashoffset: 26.4; } /* 94% filled (r=70) */
+    }
+
+    @keyframes barFill {
+      from { width: 0%; }
+      to { width: var(--target-width); }
+    }
+
+    @keyframes scanline {
+      0% { top: -5%; }
+      100% { top: 105%; }
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    @keyframes nodeGlowCrit {
+      0%, 100% { filter: drop-shadow(0 0 4px var(--critical)); }
+      50% { filter: drop-shadow(0 0 14px var(--critical)); }
+    }
+
+    @keyframes drawEdge {
+      to { stroke-dashoffset: 0; }
+    }
+
+    @keyframes checkCircle {
+      to { stroke-dashoffset: 0; }
+    }
+
+    @keyframes checkCheck {
+      to { stroke-dashoffset: 0; }
+    }
+
+    /* Blinking Dot animation */
+    .blinking-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--critical);
+      box-shadow: 0 0 6px var(--critical);
+      margin-left: 6px;
+      vertical-align: middle;
+      animation: blink 1s ease infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="logo">
+          <span class="logo-icon">◈</span>
+          <span class="logo-text">SENTRI</span>
+          <span style="font-size: 10px; color: var(--text-dim); font-weight: 600; letter-spacing: 0.1em; margin-left: 8px; align-self: flex-end; padding-bottom: 2px; font-family: var(--font-mono); white-space: nowrap;">// THE ANALYST THAT NEVER SLEEPS</span>
+        </div>
+        <div class="status-beacon-wrapper">
+          <div class="status-beacon"></div>
+          <span class="status-text">THREAT ACTIVE — INC-2847</span>
+        </div>
+        <div style="margin-left: 10px; padding-left: 15px; border-left: 1px solid var(--border-dim); display: flex; align-items: center; white-space: nowrap;">
+          <span style="font-size: 10px; font-weight: 700; color: var(--accent-electric); border: 1px solid rgba(0, 212, 255, 0.3); background-color: rgba(0, 212, 255, 0.05); padding: 3px 8px; border-radius: 3px; letter-spacing: 0.08em; font-family: var(--font-mono); text-shadow: 0 0 10px rgba(0, 212, 255, 0.2);">HACKATHON TRACK 07 // AI SECURITY THREAT MONITORING AGENT</span>
+        </div>
+      </div>
+      
+      <div class="topbar-center">
+        <div class="severity-pill crit">CRITICAL <span id="hdr-cnt-critical">4</span></div>
+        <div class="severity-pill high">HIGH <span id="hdr-cnt-high">5</span></div>
+        <div class="severity-pill med">MEDIUM <span id="hdr-cnt-medium">3</span></div>
+        <div class="severity-pill low">LOW <span id="hdr-cnt-low">3</span></div>
+      </div>
+      
+      <div class="topbar-right">
+        <div id="utc-clock" class="utc-clock">00:00:00 UTC</div>
+        <div class="user-badge">
+          <span class="user-avatar">⚡</span>
+          <span class="user-title">SOC ANALYST // OPERATOR</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN GRID WORKSPACE -->
+    <main class="workspace">
+      
+      <!-- LEFT SIDEBAR -->
+      <section class="left-sidebar">
+        
+        <!-- Donut Score -->
+        <div class="panel-block">
+          <div class="panel-title">THREAT SCORE</div>
+          <div class="panel-content donut-container" style="min-height: 180px;">
+            <svg class="score-donut" width="160" height="160" viewBox="0 0 160 160">
+              <circle class="donut-bg" cx="80" cy="80" r="70" fill="none" stroke-width="14" />
+              <circle class="donut-fill" cx="80" cy="80" r="70" fill="none" stroke="var(--critical)" stroke-width="14" 
+                      stroke-dasharray="439.8" stroke-dashoffset="439.8" />
+            </svg>
+            <div class="score-overlay">
+              <span class="score-number">94</span>
+              <span class="score-desc">CRITICAL RISK</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Severity Breakdown -->
+        <div class="panel-block">
+          <div class="panel-title">SEVERITY BREAKDOWN</div>
+          <div class="panel-content">
+            <div class="bar-row">
+              <span class="bar-label">CRITICAL</span>
+              <div class="bar-track">
+                <div class="bar-fill crit-bar" style="--target-width: 80%;"></div>
+              </div>
+              <span class="bar-value text-mono" id="brk-cnt-critical">4</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">HIGH</span>
+              <div class="bar-track">
+                <div class="bar-fill high-bar" style="--target-width: 100%;"></div>
+              </div>
+              <span class="bar-value text-mono" id="brk-cnt-high">5</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">MEDIUM</span>
+              <div class="bar-track">
+                <div class="bar-fill med-bar" style="--target-width: 60%;"></div>
+              </div>
+              <span class="bar-value text-mono" id="brk-cnt-medium">3</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">LOW</span>
+              <div class="bar-track">
+                <div class="bar-fill low-bar" style="--target-width: 60%;"></div>
+              </div>
+              <span class="bar-value text-mono" id="brk-cnt-low">3</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Geographic Map -->
+        <div class="panel-block">
+          <div class="panel-title">ATTACK ORIGIN MAP</div>
+          <div class="panel-content" style="padding: 10px;">
+            <svg class="mini-map-svg" viewBox="0 0 240 100" id="geomap-svg"></svg>
+          </div>
+        </div>
+
+        <!-- MITRE Tactic Coverage -->
+        <div class="panel-block">
+          <div class="panel-title" style="font-weight: 500;">MITRE ATT&CK</div>
+          <div class="panel-content mitre-coverage-list">
+            <div class="mitre-row"><span class="mitre-indicator red-act">✓</span> <span class="mitre-name">Initial Access</span> <span class="mitre-code text-mono">T1110</span></div>
+            <div class="mitre-row"><span class="mitre-indicator red-act">✓</span> <span class="mitre-name">Persistence</span> <span class="mitre-code text-mono">T1136</span></div>
+            <div class="mitre-row"><span class="mitre-indicator orange-act">✓</span> <span class="mitre-name">Discovery</span> <span class="mitre-code text-mono">T1046</span></div>
+            <div class="mitre-row"><span class="mitre-indicator red-act">✓</span> <span class="mitre-name">Lateral Movement</span> <span class="mitre-code text-mono">T1021</span></div>
+            <div class="mitre-row"><span class="mitre-indicator red-act">✓</span> <span class="mitre-name">Exfiltration</span> <span class="mitre-code text-mono">T1048</span></div>
+            <div class="mitre-row"><span class="mitre-indicator red-act">✓</span> <span class="mitre-name">Impact</span> <span class="mitre-code text-mono">T1486</span></div>
+          </div>
+        </div>
+
+        <!-- Sidebar Actions -->
+        <div class="panel-block sidebar-actions">
+          <div class="panel-content actions-grid">
+            <button class="action-btn btn-isolate" id="isolate-btn">⚡ ISOLATE HOST</button>
+            <button class="action-btn btn-revoke" id="revoke-btn">🔒 REVOKE TOKENS</button>
+            <button class="action-btn btn-export" id="export-btn">📋 EXPORT REPORT</button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- CENTER PANEL WORKSPACE -->
+      <section class="center-workspace">
+        
+        <!-- Live Threat Feed -->
+        <div class="threat-feed-block">
+          <div class="panel-header-filter">
+            <span class="filter-label">LIVE THREAT FEED</span>
+            <div class="filter-options">
+              <button class="filter-pill active" data-severity="ALL">ALL</button>
+              <button class="filter-pill" data-severity="CRITICAL">CRITICAL</button>
+              <button class="filter-pill" data-severity="HIGH">HIGH</button>
+              <button class="filter-pill" data-severity="MEDIUM">MEDIUM</button>
+              <button class="filter-pill" data-severity="LOW">LOW</button>
+              <span class="filter-reset-badge" id="graph-filter-clear">GRAPH NODE FILTER ACTIVE [CLEAR]</span>
+            </div>
+          </div>
+          <div class="alert-cards-feed" id="threat-feed-container">
+            <!-- Cards will be injected dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- Attack Chain Graph -->
+        <div class="attack-graph-block">
+          <div class="graph-panel-header">
+            <span>ATTACK CHAIN VISUALIZATION</span>
+            <div class="graph-header-actions">
+              <button id="graph-maximize-btn" class="btn-max-toggle">⛶ FULL VIEW</button>
+              <span class="text-mono" style="color: var(--accent-electric);">D3 PHYSICS SIMULATION</span>
+            </div>
+          </div>
+          <div class="graph-wrapper" id="attack-graph-wrapper">
+            <svg id="attack-chain-svg"></svg>
+            <div class="graph-tooltip" id="graph-tooltip"></div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- RIGHT PANEL SIDEBAR -->
+      <section class="right-sidebar">
+        
+        <!-- AI Explanation Block -->
+        <div class="ai-explanation-block">
+          <div class="panel-title">AI THREAT EXPLANATION</div>
+          <div class="crt-scanline-beam"></div>
+          <div class="ai-scroll-content">
+            
+            <div class="ai-default-state" id="ai-empty-state">
+              <span class="ai-default-icon">◈</span>
+              <span>&larr; Select a threat to activate AI analysis<span class="ai-default-cursor"></span></span>
+            </div>
+            
+            <div class="ai-active-panel" id="ai-active-panel">
+              <div class="ai-header">
+                <span class="ai-header-id" id="ai-evt-id">EVT-XXXX</span>
+                <span class="card-severity" id="ai-evt-severity">CRITICAL</span>
+              </div>
+              
+              <div>
+                <div class="ai-section-title">SENTRI ANALYSIS</div>
+                <div class="ai-summary-text" id="ai-summary-text"></div>
+              </div>
+              
+              <div>
+                <div class="ai-section-title">ATTACK CONTEXT</div>
+                <div class="timeline-vertical" id="ai-timeline">
+                  <!-- Related events dynamic items -->
+                </div>
+              </div>
+              
+              <div>
+                <div class="ai-section-title">THREAT INTEL</div>
+                <div class="intel-grid">
+                  <div class="intel-row">
+                    <span class="intel-row-lbl">MITRE Tactic</span>
+                    <span class="intel-row-val text-mono" id="ai-intel-mitre">T1110</span>
+                  </div>
+                  <div class="intel-row">
+                    <span class="intel-row-lbl">False Positive Risk</span>
+                    <div style="text-align: right;"><span class="risk-badge" id="ai-intel-fp">10%</span></div>
+                  </div>
+                  <div class="intel-row">
+                    <span class="intel-row-lbl">Confidence Rate</span>
+                    <span class="intel-row-val text-mono" id="ai-intel-confidence">90%</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="recs-block">
+                <div class="recs-title">RECOMMENDED ACTIONS</div>
+                <div class="recs-text" id="ai-recommended-actions"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Threat Statistics -->
+        <div class="stats-history-block">
+          <div class="panel-title">THREAT METRICS</div>
+          
+          <div class="stats-grid-2x2">
+            <div class="stat-card">
+              <span class="stat-label">Total Events</span>
+              <div class="stat-val-row">
+                <span class="stat-value" id="stat-total-events">20</span>
+                <!-- Sparkline SVG -->
+                <svg class="stat-sparkline" viewBox="0 0 50 20">
+                  <path d="M 0,18 L 10,15 L 20,16 L 30,8 L 40,11 L 50,2" fill="none" stroke="var(--accent-electric)" stroke-width="1.5" />
+                </svg>
+              </div>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Mean Detection</span>
+              <div class="stat-val-row">
+                <span class="stat-value green-text">4 min</span>
+                <svg class="stat-sparkline" viewBox="0 0 50 20">
+                  <path d="M 0,12 L 10,12 L 20,8 L 30,14 L 40,8 L 50,6" fill="none" stroke="var(--low)" stroke-width="1.5" />
+                </svg>
+              </div>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Active Compromised</span>
+              <div class="stat-val-row">
+                <span class="stat-value font-weight-bold crit-text" id="stat-comp-hosts">3</span>
+                <svg class="stat-sparkline" viewBox="0 0 50 20">
+                  <path d="M 0,18 L 10,16 L 20,15 L 30,6 L 40,5 L 50,2" fill="none" stroke="var(--critical)" stroke-width="1.5" />
+                </svg>
+              </div>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Exfiltrated Data</span>
+              <div class="stat-val-row">
+                <span class="stat-value crit-text">1.08 GB<span class="blinking-dot"></span></span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="stats-chart-wrapper">
+            <div class="chart-title-row">
+              <span>ALERT TIMELINE PROFILE</span>
+              <span>EVENTS PER HOUR</span>
+            </div>
+            <canvas id="timeline-chart"></canvas>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- FULLSCREEN OVERLAY MODALS -->
+  <div class="modal-overlay" id="isolate-modal">
+    <div class="modal-content">
+      <svg class="modal-checkmark-svg" viewBox="0 0 64 64">
+        <circle class="modal-checkmark-circle" cx="32" cy="32" r="30" />
+        <path class="modal-checkmark-check" d="M20 32 L28 40 L44 22" />
+      </svg>
+      <div class="modal-title">ISOLATION COMMAND SENT</div>
+      <div class="modal-text" id="isolate-modal-message">
+        Host 10.0.2.22 isolated at 00:00:00 UTC
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="revoke-modal">
+    <div class="modal-content" style="border-color: var(--high); box-shadow: 0 0 30px rgba(255, 107, 26, 0.3);">
+      <svg class="modal-checkmark-svg" viewBox="0 0 64 64" style="stroke: var(--high);">
+        <circle class="modal-checkmark-circle" cx="32" cy="32" r="30" />
+        <path class="modal-checkmark-check" d="M20 32 L28 40 L44 22" />
+      </svg>
+      <div class="modal-title" style="color: var(--high);">TOKENS INVALIDATED</div>
+      <div class="modal-text">
+        Active DevOps and Monitoring credential tokens have been globally revoked.
+      </div>
+    </div>
+  </div>
+
+  <!-- DATA & ENGINE SCRIPTS -->
+  <script>
+    // UTC Clock
+    function updateUTCClock() {
+      const clockEl = document.getElementById('utc-clock');
+      const now = new Date();
+      const pad = (num) => String(num).padStart(2, '0');
+      const timeStr = `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC`;
+      clockEl.textContent = timeStr;
+    }
+    setInterval(updateUTCClock, 1000);
+    updateUTCClock();
+
+    // Setup Mock Events with Dynamic Relational Timestamps
+    const relativeTimeStr = (minsAgo) => {
+      if (minsAgo < 60) return `${minsAgo}m ago`;
+      const hrs = Math.floor(minsAgo / 60);
+      const mins = minsAgo % 60;
+      return mins > 0 ? `${hrs}h ${mins}m ago` : `${hrs}h ago`;
+    };
+
+    const getDynamicTime = (minsAgo) => {
+      return new Date(Date.now() - minsAgo * 60 * 1000);
+    };
+
+    // The 20 Core Events (chronological order)
+    const MOCK_EVENTS = [
+      {
+        id: "EVT-4468",
+        timestamp: getDynamicTime(300), // 5h ago
+        severity: "LOW",
+        category: "AUTH",
+        title: "Normal business hours login — engineering team",
+        source_ip: "203.45.12.88",
+        source_geo: { country: "IN", city: "Bangalore", lat: 12.97, lng: 77.59 },
+        target: "auth-service.prod",
+        raw_log: "Successful login: dev-lead@company.io | IP: 203.45.12.88 | UA: Chrome/121",
+        ai_summary: "Routine authentication from a known engineering team member in Bangalore. IP is within normal operating range. No anomalies detected. Confidence: benign.",
+        mitre: null,
+        false_positive_probability: "97%",
+        related_events: []
+      },
+      {
+        id: "EVT-4469",
+        timestamp: getDynamicTime(270), // 4.5h ago
+        severity: "LOW",
+        category: "NETWORK",
+        title: "Automated health check — load balancer",
+        source_ip: "10.0.0.1",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "*.internal",
+        raw_log: "Health check sweep: 10.0.0.1 → all registered services | 200 OK x47, 503 x2",
+        ai_summary: "Routine load balancer health check. Two services returned 503 (staging-db, legacy-api) — these are known degraded services not in production path. No security relevance. RECOMMENDED: Review the 503s as a reliability concern, not a security concern.",
+        mitre: null,
+        false_positive_probability: "99%",
+        related_events: []
+      },
+      {
+        id: "EVT-4471",
+        timestamp: getDynamicTime(240), // 4h ago
+        severity: "LOW",
+        category: "AUTH",
+        title: "Repeated login failures — admin portal",
+        source_ip: "185.220.101.47",
+        source_geo: { country: "RU", city: "Moscow", lat: 55.75, lng: 37.62 },
+        target: "auth-service.prod",
+        raw_log: "Failed login attempt for user admin@company.io from 185.220.101.47 [attempt 1/5]",
+        ai_summary: "Early-stage credential probing detected on the admin portal. An external IP from Russia has begun systematic login attempts against the admin account. This is consistent with automated credential-stuffing toolkits. RECOMMENDED: Monitor for escalation. Enforce CAPTCHA on login.",
+        mitre: "T1110.004 — Credential Stuffing",
+        false_positive_probability: "8%",
+        related_events: []
+      },
+      {
+        id: "EVT-4472",
+        timestamp: getDynamicTime(232), // 3h 52m ago
+        severity: "LOW",
+        category: "AUTH",
+        title: "Login failures increasing — 23 attempts in 8 min",
+        source_ip: "185.220.101.47",
+        source_geo: { country: "RU", city: "Moscow", lat: 55.75, lng: 37.62 },
+        target: "auth-service.prod",
+        raw_log: "23 failed login attempts from 185.220.101.47 in 480 seconds. Rate: 2.87 req/s",
+        ai_summary: "Attack velocity is increasing. The attacker is now cycling through a credential list at 2.87 attempts/second — a classic automated spray pattern. Still hitting the same external IP. RECOMMENDED: Rate-limit 185.220.101.47 immediately. Alert on-call security.",
+        mitre: "T1110.003 — Password Spraying",
+        false_positive_probability: "3%",
+        related_events: ["EVT-4471"]
+      },
+      {
+        id: "EVT-4473",
+        timestamp: getDynamicTime(221), // 3h 41m ago
+        severity: "HIGH",
+        category: "AUTH",
+        title: "SUCCESSFUL LOGIN — suspicious credentials",
+        source_ip: "185.220.101.47",
+        source_geo: { country: "RU", city: "Moscow", lat: 55.75, lng: 37.62 },
+        target: "auth-service.prod",
+        raw_log: "Successful authentication: devops-svc@company.io | IP: 185.220.101.47 | UA: python-requests/2.28.0",
+        ai_summary: "BREACH POINT: The attacker successfully authenticated using the 'devops-svc' service account. The User-Agent 'python-requests' confirms this is automated tooling, not a human. This account has elevated privileges across 3 internal systems. RECOMMENDED: Immediately invalidate this session token. Force password reset on devops-svc.",
+        mitre: "T1078 — Valid Accounts",
+        false_positive_probability: "1%",
+        related_events: ["EVT-4471", "EVT-4472"]
+      },
+      {
+        id: "EVT-4474",
+        timestamp: getDynamicTime(218), // 3h 38m ago
+        severity: "HIGH",
+        category: "RECON",
+        title: "Internal network enumeration detected",
+        source_ip: "10.0.1.15",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "internal-network",
+        raw_log: "Port scan detected: 10.0.1.15 → 10.0.0.0/24 | 847 ports probed in 12s | SYN-only packets",
+        ai_summary: "The compromised devops-svc account is now inside the network and scanning internal infrastructure. This SYN scan is classic lateral movement reconnaissance — the attacker is mapping live hosts before deciding where to pivot. RECOMMENDED: Isolate 10.0.1.15 from the internal network segment immediately.",
+        mitre: "T1046 — Network Service Discovery",
+        false_positive_probability: "2%",
+        related_events: ["EVT-4473"]
+      },
+      {
+        id: "EVT-4475",
+        timestamp: getDynamicTime(210), // 3h 30m ago
+        severity: "CRITICAL",
+        category: "LATERAL_MOVEMENT",
+        title: "Lateral movement — payment service accessed",
+        source_ip: "10.0.1.15",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "payments-api.internal",
+        raw_log: "Authenticated API call from 10.0.1.15 to payments-api.internal/admin/transactions | devops-svc token | 200 OK",
+        ai_summary: "CRITICAL: The attacker has reached your payments API using the devops-svc token. They're making authenticated calls to the /admin/transactions endpoint — this endpoint returns full transaction records including card metadata. RECOMMENDED: Revoke devops-svc token NOW. Activate incident response. Begin forensic capture of payments-api logs.",
+        mitre: "T1021 — Remote Services",
+        false_positive_probability: "0.5%",
+        related_events: ["EVT-4473", "EVT-4474"]
+      },
+      {
+        id: "EVT-4476",
+        timestamp: getDynamicTime(202), // 3h 22m ago
+        severity: "CRITICAL",
+        category: "EXFILTRATION",
+        title: "Large data transfer to external endpoint",
+        source_ip: "10.0.1.15",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "185.220.101.89",
+        raw_log: "Outbound transfer: 10.0.1.15 → 185.220.101.89:443 | 847MB in 380s | HTTPS | SNI: cdn-fast-delivery[.]net",
+        ai_summary: "ACTIVE EXFILTRATION IN PROGRESS: 847MB transferred to a known Tor exit node (185.220.101.89) disguised behind a fake CDN domain. This is the data leaving your network right now. RECOMMENDED: Block all egress to 185.220.101.89/24 at the firewall immediately. This is a declared incident — escalate to CISO.",
+        mitre: "T1048 — Exfiltration Over Alternative Protocol",
+        false_positive_probability: "0.1%",
+        related_events: ["EVT-4473", "EVT-4474", "EVT-4475"]
+      },
+      {
+        id: "EVT-4477",
+        timestamp: getDynamicTime(190), // 3h 10m ago
+        severity: "HIGH",
+        category: "PERSISTENCE",
+        title: "New admin account created silently",
+        source_ip: "10.0.1.15",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "user-service.internal",
+        raw_log: "POST /admin/users | body: {email: 'backup-monitoring@company.io', role: 'admin'} | actor: devops-svc",
+        ai_summary: "The attacker created a backdoor admin account named 'backup-monitoring' — designed to look like a legitimate system account. This is a persistence mechanism: even if the original session is killed, they can re-enter via this account. RECOMMENDED: Disable this account immediately. Audit all accounts created in the last 6 hours.",
+        mitre: "T1136 — Create Account",
+        false_positive_probability: "1%",
+        related_events: ["EVT-4473", "EVT-4476"]
+      },
+      {
+        id: "EVT-4478",
+        timestamp: getDynamicTime(175), // 2h 55m ago
+        severity: "MEDIUM",
+        category: "DEFENSE_EVASION",
+        title: "Audit log tampering attempt",
+        source_ip: "10.0.1.15",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "logging-service.internal",
+        raw_log: "DELETE /api/v1/logs?before=2024-01-15T03:00:00Z | actor: devops-svc | Response: 403 Forbidden",
+        ai_summary: "The attacker attempted to delete audit logs covering the attack window — standard anti-forensics. The DELETE was blocked (403) because devops-svc lacks log-write permissions. However, this confirms the attacker is aware they've been active and trying to cover tracks. RECOMMENDED: Lock log deletion permissions globally. Preserve all logs from this window.",
+        mitre: "T1070 — Indicator Removal",
+        false_positive_probability: "2%",
+        related_events: ["EVT-4476", "EVT-4477"]
+      },
+      {
+        id: "EVT-4479",
+        timestamp: getDynamicTime(150), // 2h 30m ago
+        severity: "MEDIUM",
+        category: "AUTH",
+        title: "Backdoor account login from new IP",
+        source_ip: "91.108.4.45",
+        source_geo: { country: "NL", city: "Amsterdam", lat: 52.37, lng: 4.90 },
+        target: "auth-service.prod",
+        raw_log: "Successful login: backup-monitoring@company.io | IP: 91.108.4.45 | UA: Mozilla/5.0 | New IP for account",
+        ai_summary: "The backdoor account created in EVT-4477 has been activated from a different IP in Amsterdam — likely a second hop to complicate attribution. This is the attacker re-establishing access after sensing detection. RECOMMENDED: Disable backup-monitoring account and invalidate all its tokens. Block 91.108.4.45.",
+        mitre: "T1078 — Valid Accounts",
+        false_positive_probability: "1%",
+        related_events: ["EVT-4477"]
+      },
+      {
+        id: "EVT-4480",
+        timestamp: getDynamicTime(135), // 2h 15m ago
+        severity: "LOW",
+        category: "RECON",
+        title: "S3 bucket enumeration — cloud asset probing",
+        source_ip: "10.0.2.22",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "s3.amazonaws.com",
+        raw_log: "S3 ListBuckets API call | actor: backup-monitoring | 12 buckets enumerated | 3 public-access-check failed",
+        ai_summary: "The attacker is now probing your cloud storage from the new session. They listed all S3 buckets and checked 3 for public access misconfiguration. This suggests they're looking for another exfiltration channel or additional data to steal. RECOMMENDED: Enable S3 Block Public Access at the account level. Revoke backup-monitoring IAM permissions.",
+        mitre: "T1530 — Data from Cloud Storage",
+        false_positive_probability: "5%",
+        related_events: ["EVT-4479"]
+      },
+      {
+        id: "EVT-4481",
+        timestamp: getDynamicTime(110), // 1h 50m ago
+        severity: "LOW",
+        category: "AUTH",
+        title: "Multiple failed MFA bypass attempts",
+        source_ip: "91.108.4.45",
+        source_geo: { country: "NL", city: "Amsterdam", lat: 52.37, lng: 4.90 },
+        target: "auth-service.prod",
+        raw_log: "MFA challenge failed x7 for backup-monitoring@company.io | methods tried: TOTP, SMS, backup-code",
+        ai_summary: "The attacker is attempting MFA bypass on a secondary account — trying TOTP, SMS, and even backup codes. This suggests they have partial account information but not MFA secrets. The MFA is holding. RECOMMENDED: MFA is currently your last line of defense. Do not disable it under any circumstances.",
+        mitre: "T1111 — Multi-Factor Authentication Interception",
+        false_positive_probability: "4%",
+        related_events: ["EVT-4479"]
+      },
+      {
+        id: "EVT-4482",
+        timestamp: getDynamicTime(90), // 1h 30m ago
+        severity: "MEDIUM",
+        category: "RECON",
+        title: "CI/CD pipeline accessed — build secrets exposed",
+        source_ip: "10.0.2.22",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "ci-cd.internal",
+        raw_log: "GET /api/v1/pipelines/secrets | actor: devops-svc | 200 OK | 14 secrets returned (REDACTED in log)",
+        ai_summary: "The devops-svc token was used to access the CI/CD secrets vault and successfully retrieved 14 build secrets — including likely API keys, deploy tokens, and environment variables. RECOMMENDED: Rotate ALL secrets returned by this endpoint immediately. Treat every key it holds as compromised.",
+        mitre: "T1552.001 — Credentials In Files",
+        false_positive_probability: "1%",
+        related_events: ["EVT-4473", "EVT-4474"]
+      },
+      {
+        id: "EVT-4483",
+        timestamp: getDynamicTime(70), // 1h 10m ago
+        severity: "HIGH",
+        category: "EXFILTRATION",
+        title: "Second exfiltration wave — customer PII",
+        source_ip: "10.0.2.22",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "91.108.4.88",
+        raw_log: "Outbound: 10.0.2.22 → 91.108.4.88:8443 | 234MB | Duration: 180s | Content-Type: application/octet-stream",
+        ai_summary: "A second exfiltration detected, this time from a different internal host targeting a different external IP. The 234MB transfer likely contains customer PII from the database accessed via the CI/CD secrets. RECOMMENDED: This is now a data breach event. Engage legal counsel. Prepare breach notification procedures per GDPR/CCPA.",
+        mitre: "T1048 — Exfiltration Over Alternative Protocol",
+        false_positive_probability: "1%",
+        related_events: ["EVT-4476", "EVT-4482"]
+      },
+      {
+        id: "EVT-4484",
+        timestamp: getDynamicTime(55), // 55m ago
+        severity: "CRITICAL",
+        category: "RANSOMWARE_PRECURSOR",
+        title: "Ransomware toolkit downloaded to internal host",
+        source_ip: "10.0.2.22",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "10.0.2.22",
+        raw_log: "Inbound download: 91.108.4.45 → 10.0.2.22 | File: update_util.zip | Size: 48MB | SHA256: a1b2c3...f8e9",
+        ai_summary: "IMMINENT THREAT: A 48MB archive was downloaded to an internal host from the attacker's IP. The filename 'update_util.zip' is a known ransomware delivery disguise. The SHA256 hash partially matches the RansomHub toolkit family. RECOMMENDED: Immediately isolate 10.0.2.22. Do not allow this file to execute. Engage IR team. Consider network-wide isolation of affected VLAN.",
+        mitre: "T1105 — Ingress Tool Transfer",
+        false_positive_probability: "0.2%",
+        related_events: ["EVT-4479", "EVT-4483"]
+      },
+      {
+        id: "EVT-4485",
+        timestamp: getDynamicTime(40), // 40m ago
+        severity: "CRITICAL",
+        category: "RANSOMWARE",
+        title: "RANSOMWARE EXECUTION DETECTED — 3 hosts encrypted",
+        source_ip: "10.0.2.22",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "10.0.2.22, 10.0.3.11, 10.0.3.45",
+        raw_log: "Mass file rename detected: *.company → *.locked | Rate: 4,200 files/min | 3 hosts affected | Ransom note dropped: README_DECRYPT.txt",
+        ai_summary: "ACTIVE RANSOMWARE EVENT: Encryption is actively running across 3 internal hosts at 4,200 files/minute. A ransom note has been dropped. This is no longer a prevention scenario — it is containment and recovery. RECOMMENDED: Pull network cables on all affected hosts. Activate DRP. Do not pay without legal/insurance guidance. Preserve encrypted files for potential decryption.",
+        mitre: "T1486 — Data Encrypted for Impact",
+        false_positive_probability: "0%",
+        related_events: ["EVT-4484"]
+      },
+      {
+        id: "EVT-4486",
+        timestamp: getDynamicTime(25), // 25m ago
+        severity: "MEDIUM",
+        category: "AUTH",
+        title: "SOC analyst login — incident response initiated",
+        source_ip: "10.0.10.5",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "security-console.internal",
+        raw_log: "Login: soc-analyst-1@company.io | IP: 10.0.10.5 | Incident ticket INC-2847 opened",
+        ai_summary: "Your SOC team has logged in and opened incident ticket INC-2847. Incident response is now active. This event marks the transition from detection to response phase. SENTRI has automatically compiled the full attack timeline for the IR team.",
+        mitre: null,
+        false_positive_probability: "99%",
+        related_events: ["EVT-4485"]
+      },
+      {
+        id: "EVT-4487",
+        timestamp: getDynamicTime(15), // 15m ago
+        severity: "HIGH",
+        category: "LATERAL_MOVEMENT",
+        title: "Attacker pivoting to backup servers",
+        source_ip: "10.0.3.45",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "backup-srv-01.internal",
+        raw_log: "SSH connection attempt: 10.0.3.45 → backup-srv-01.internal:22 | Key auth: FAILED x3 | Password auth: attempt",
+        ai_summary: "Even during active ransomware execution, the attacker is pivoting toward backup infrastructure — targeting your backup server is a classic ransomware 'insurance' move to prevent recovery. RECOMMENDED: Immediately take backup-srv-01 offline. Ensure offsite backups are disconnected from network access.",
+        mitre: "T1490 — Inhibit System Recovery",
+        false_positive_probability: "1%",
+        related_events: ["EVT-4485"]
+      },
+      {
+        id: "EVT-4488",
+        timestamp: getDynamicTime(5), // 5m ago
+        severity: "CRITICAL",
+        category: "C2",
+        title: "Command & Control beacon — active attacker comms",
+        source_ip: "10.0.2.22",
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: "185.220.101.47",
+        raw_log: "Periodic beacon detected: 10.0.2.22 → 185.220.101.47 | Interval: 30s | Encrypted: TLS 1.3 | JA3: 7f3d5e...",
+        ai_summary: "ACTIVE C2 CHANNEL: The compromised host is beaconing to the attacker's C2 server every 30 seconds, indicating the attacker maintains real-time control. The JA3 TLS fingerprint matches the Cobalt Strike Malleable C2 profile. RECOMMENDED: Block all traffic to 185.220.101.47 at the network perimeter. Isolate 10.0.2.22 immediately.",
+        mitre: "T1071 — Application Layer Protocol",
+        false_positive_probability: "0.1%",
+        related_events: ["EVT-4485", "EVT-4476"]
+      }
+    ];
+
+    // Global application state variables
+    let eventsArray = [...MOCK_EVENTS].sort((a,b) => b.timestamp - a.timestamp);
+    let selectedEventId = null;
+    let severityFilter = "ALL";
+    let nodeFilter = null; // Filter feed by specific D3 node selection
+
+    // DOM Elements
+    const feedContainer = document.getElementById('threat-feed-container');
+    const aiEmptyState = document.getElementById('ai-empty-state');
+    const aiActivePanel = document.getElementById('ai-active-panel');
+    const graphFilterClear = document.getElementById('graph-filter-clear');
+
+    // Render Event Counters and Breakdown Panel counts
+    function updateStatsCounters() {
+      const counts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+      eventsArray.forEach(e => {
+        if(counts[e.severity] !== undefined) {
+          counts[e.severity]++;
+        }
+      });
+
+      // Update Topbar
+      document.getElementById('hdr-cnt-critical').textContent = counts.CRITICAL;
+      document.getElementById('hdr-cnt-high').textContent = counts.HIGH;
+      document.getElementById('hdr-cnt-medium').textContent = counts.MEDIUM;
+      document.getElementById('hdr-cnt-low').textContent = counts.LOW;
+
+      // Update Left Sidebar breakdown numbers
+      document.getElementById('brk-cnt-critical').textContent = counts.CRITICAL;
+      document.getElementById('brk-cnt-high').textContent = counts.HIGH;
+      document.getElementById('brk-cnt-medium').textContent = counts.MEDIUM;
+      document.getElementById('brk-cnt-low').textContent = counts.LOW;
+
+      // Update left bar widths
+      const maxCount = Math.max(...Object.values(counts));
+      const getPercent = (count) => maxCount > 0 ? (count / maxCount) * 100 : 0;
+      
+      document.querySelector('.crit-bar').style.setProperty('--target-width', `${getPercent(counts.CRITICAL)}%`);
+      document.querySelector('.high-bar').style.setProperty('--target-width', `${getPercent(counts.HIGH)}%`);
+      document.querySelector('.med-bar').style.setProperty('--target-width', `${getPercent(counts.MEDIUM)}%`);
+      document.querySelector('.low-bar').style.setProperty('--target-width', `${getPercent(counts.LOW)}%`);
+
+      // Update Total Events card count
+      document.getElementById('stat-total-events').textContent = eventsArray.length;
+    }
+
+    // Typewriter state tracking
+    let typingInterval = null;
+
+    function runTypewriter(text, element, speed = 30, onComplete = null) {
+      if (typingInterval) clearInterval(typingInterval);
+      element.innerHTML = "";
+      let index = 0;
+      typingInterval = setInterval(() => {
+        if (index < text.length) {
+          element.innerHTML += text.charAt(index);
+          index++;
+        } else {
+          clearInterval(typingInterval);
+          if (onComplete) onComplete();
+        }
+      }, speed); // ~33 chars per second at 30ms
+    }
+
+    // AI Panel population
+    function populateAIPanel(evt) {
+      aiEmptyState.style.display = 'none';
+      aiActivePanel.style.display = 'flex';
+
+      // Header fields
+      document.getElementById('ai-evt-id').textContent = evt.id;
+      const severityBadge = document.getElementById('ai-evt-severity');
+      severityBadge.textContent = evt.severity;
+      severityBadge.className = `card-severity`; // Reset class
+      
+      // Update badge coloring
+      let badgeColor = 'var(--info)';
+      if(evt.severity === 'CRITICAL') badgeColor = 'var(--critical)';
+      else if(evt.severity === 'HIGH') badgeColor = 'var(--high)';
+      else if(evt.severity === 'MEDIUM') badgeColor = 'var(--medium)';
+      else if(evt.severity === 'LOW') badgeColor = 'var(--low)';
+      severityBadge.style.backgroundColor = `${badgeColor}20`; // 20% opacity
+      severityBadge.style.color = badgeColor;
+
+      // Clean extract of Recommended Actions
+      const recIndex = evt.ai_summary.indexOf("RECOMMENDED:");
+      let explanation = evt.ai_summary;
+      let recs = "No specific actions recommended.";
+      if(recIndex !== -1) {
+        explanation = evt.ai_summary.substring(0, recIndex).trim();
+        recs = evt.ai_summary.substring(recIndex + 12).trim();
+      }
+
+      // Execute Typewriter for analysis explanation
+      const summaryTextEl = document.getElementById('ai-summary-text');
+      runTypewriter(explanation, summaryTextEl, 30, () => {
+        summaryTextEl.innerHTML += '<span class="ai-default-cursor"></span>';
+      });
+
+      // Recommendations
+      document.getElementById('ai-recommended-actions').textContent = recs;
+
+      // MITRE Tactics
+      document.getElementById('ai-intel-mitre').textContent = evt.mitre ? evt.mitre : "—";
+
+      // FP Risk and Confidence
+      const fpVal = parseFloat(evt.false_positive_probability);
+      const fpBadge = document.getElementById('ai-intel-fp');
+      fpBadge.textContent = evt.false_positive_probability;
+      fpBadge.className = "risk-badge";
+      if(fpVal < 1) fpBadge.classList.add('crit-risk'); // very low FP is a critical threat
+      else if(fpVal < 5) fpBadge.classList.add('high-risk');
+      else if(fpVal < 10) fpBadge.classList.add('med-risk');
+      else fpBadge.classList.add('low-risk');
+
+      const confVal = 100 - fpVal;
+      document.getElementById('ai-intel-confidence').textContent = `${confVal}%`;
+
+      // Related events timeline
+      const timelineContainer = document.getElementById('ai-timeline');
+      timelineContainer.innerHTML = '';
+      
+      // Always include current event, plus related events
+      const allRelatedIds = evt.related_events || [];
+      const relatedEvents = eventsArray.filter(e => allRelatedIds.includes(e.id) || e.id === evt.id)
+                                        .sort((a,b) => a.timestamp - b.timestamp); // Chronological inside context
+
+      if(relatedEvents.length <= 1) {
+        // No relationships
+        const item = document.createElement('div');
+        item.className = 'timeline-node-item active';
+        item.innerHTML = `
+          <div class="timeline-dot"></div>
+          <div class="timeline-item-meta">
+            <span class="timeline-item-id">${evt.id}</span>
+            <span class="timeline-item-time">${formatTimeAgo(evt.timestamp)}</span>
+          </div>
+          <div class="timeline-item-title">${evt.title}</div>
+        `;
+        timelineContainer.appendChild(item);
+      } else {
+        relatedEvents.forEach(re => {
+          const isActive = re.id === evt.id;
+          const item = document.createElement('div');
+          item.className = `timeline-node-item ${isActive ? 'active' : ''}`;
+          item.innerHTML = `
+            <div class="timeline-dot"></div>
+            <div class="timeline-item-meta">
+              <span class="timeline-item-id">${re.id}</span>
+              <span class="timeline-item-time">${formatTimeAgo(re.timestamp)}</span>
+            </div>
+            <div class="timeline-item-title">${re.title}</div>
+          `;
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectEvent(re.id);
+          });
+          timelineContainer.appendChild(item);
+        });
+      }
+    }
+
+    // Helper: format relative hours/mins
+    function formatTimeAgo(date) {
+      const diffMs = Date.now() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      return relativeTimeStr(diffMins);
+    }
+
+    // Select active event card
+    function selectEvent(id) {
+      selectedEventId = id;
+      
+      // Update card active highlights
+      const cards = document.querySelectorAll('.alert-card');
+      cards.forEach(card => {
+        if(card.dataset.id === id) {
+          card.classList.add('selected');
+          card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          card.classList.remove('selected');
+        }
+      });
+
+      // Find event details
+      const evt = eventsArray.find(e => e.id === id);
+      if(evt) {
+        populateAIPanel(evt);
+        // Highlight nodes inside D3 graph
+        highlightGraphNode(evt.source_ip, evt.target);
+      }
+    }
+
+    // Highlight node in D3 force-directed visualizer
+    function highlightGraphNode(sourceIp, targetText) {
+      const svg = d3.select("#attack-chain-svg");
+      svg.selectAll(".graph-node")
+         .attr("stroke", d => {
+            if(d.id === sourceIp || targetText.includes(d.id)) {
+              return "var(--accent-electric)";
+            }
+            return d.compromised ? "var(--critical)" : "var(--border-glow)";
+         })
+         .attr("stroke-width", d => {
+            if(d.id === sourceIp || targetText.includes(d.id)) return 3;
+            return d.compromised ? 2 : 1.5;
+         });
+    }
+
+    // Render threat feed logs based on filters
+    function renderThreatFeed() {
+      // Clear feed container
+      feedContainer.innerHTML = '';
+      
+      // Filter list
+      let filtered = eventsArray;
+      if(severityFilter !== "ALL") {
+        filtered = filtered.filter(e => e.severity === severityFilter);
+      }
+      if(nodeFilter) {
+        filtered = filtered.filter(e => e.source_ip === nodeFilter || e.target.includes(nodeFilter));
+      }
+
+      // Show filter badge if node is filtered
+      if(nodeFilter) {
+        graphFilterClear.style.display = 'inline-block';
+        graphFilterClear.textContent = `NODE: ${nodeFilter} [CLEAR]`;
+      } else {
+        graphFilterClear.style.display = 'none';
+      }
+
+      filtered.forEach((evt, idx) => {
+        const isNew = (Date.now() - evt.timestamp.getTime()) < 10 * 60 * 1000; // < 10 min
+        
+        const card = document.createElement('div');
+        card.className = `alert-card ${evt.severity.toLowerCase()}-card`;
+        card.dataset.id = evt.id;
+        card.style.animationDelay = `${idx * 0.05}s`;
+        
+        // Critical alerts extra red background tint
+        if(evt.severity === "CRITICAL") {
+          card.classList.add('is-critical-event');
+        }
+        if(selectedEventId === evt.id) {
+          card.classList.add('selected');
+        }
+
+        const mitreTag = evt.mitre ? `<span class="card-mitre-tag"><span>🛡</span> ${evt.mitre.split(" ")[0]}</span>` : "";
+        const newBadge = isNew ? `<span class="pulse-new-badge">NEW</span>` : "";
+
+        card.innerHTML = `
+          ${newBadge}
+          <div class="card-top">
+            <div class="card-meta-left">
+              <span class="card-severity">${evt.severity}</span>
+              <span class="card-separator">|</span>
+              <span class="card-id text-mono">${evt.id}</span>
+              <span class="card-separator">|</span>
+              <span class="card-category text-mono" style="color: var(--text-secondary);">${evt.category}</span>
+              <span class="card-separator">|</span>
+              <span class="card-time text-mono">${formatTimeAgo(evt.timestamp)}</span>
+            </div>
+          </div>
+          <div class="card-title">${evt.title}</div>
+          <div class="card-routing">
+            <span class="card-ip text-mono">${evt.source_ip}</span>
+            <span class="card-arrow">&rarr;</span>
+            <span class="card-target text-mono">${evt.target}</span>
+          </div>
+          ${mitreTag ? `<div class="card-bottom-tags">${mitreTag}</div>` : ""}
+        `;
+
+        card.addEventListener('click', () => {
+          selectEvent(evt.id);
+        });
+
+        feedContainer.appendChild(card);
+      });
+
+      if(filtered.length === 0) {
+        feedContainer.innerHTML = `
+          <div class="ai-default-state" style="grid-column: span 3; min-height: 120px;">
+            <span>No alerts matching the active filters.</span>
+          </div>
+        `;
+      }
+    }
+
+    // Filter Navigation Pills
+    const filterPills = document.querySelectorAll('.filter-pill');
+    filterPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        filterPills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        severityFilter = pill.dataset.severity;
+        renderThreatFeed();
+      });
+    });
+
+    graphFilterClear.addEventListener('click', () => {
+      nodeFilter = null;
+      renderThreatFeed();
+      resetGraphHighlights();
+    });
+
+    function resetGraphHighlights() {
+      const svg = d3.select("#attack-chain-svg");
+      svg.selectAll(".graph-node")
+         .attr("stroke", d => d.compromised ? "var(--critical)" : "var(--border-glow)")
+         .attr("stroke-width", d => d.compromised ? 2 : 1.5);
+    }
+
+    // SYSTEM ACTIONS CODE
+    const isolateBtn = document.getElementById('isolate-btn');
+    const revokeBtn = document.getElementById('revoke-btn');
+    const exportBtn = document.getElementById('export-btn');
+
+    const isolateModal = document.getElementById('isolate-modal');
+    const revokeModal = document.getElementById('revoke-modal');
+
+    isolateBtn.addEventListener('click', () => {
+      const now = new Date();
+      const pad = (num) => String(num).padStart(2, '0');
+      const timeStr = `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC`;
+      document.getElementById('isolate-modal-message').innerHTML = `Host <span style="font-family: var(--font-mono); color: var(--critical);">10.0.2.22</span> quarantined at <span style="font-family: var(--font-mono); color: var(--text-mono);">${timeStr}</span>`;
+      
+      isolateModal.style.display = 'flex';
+      setTimeout(() => {
+        isolateModal.style.display = 'none';
+      }, 3000);
+    });
+
+    revokeBtn.addEventListener('click', () => {
+      revokeModal.style.display = 'flex';
+      setTimeout(() => {
+        revokeModal.style.display = 'none';
+      }, 3000);
+    });
+
+    exportBtn.addEventListener('click', () => {
+      let reportText = `========================================================\n`;
+      reportText += `       SENTRI INCIDENT REPORT — TICKET INC-2847         \n`;
+      reportText += `       Generated: ${new Date().toUTCString()}           \n`;
+      reportText += `========================================================\n\n`;
+      reportText += `Summary: Coordinated credential-stuffing, lateral movement,\n`;
+      reportText += `and data exfiltration attack on company network infrastructure.\n\n`;
+      reportText += `RECORDS LOG:\n`;
+      reportText += `--------------------------------------------------------\n\n`;
+
+      eventsArray.forEach(evt => {
+        reportText += `ID: ${evt.id}\n`;
+        reportText += `Timestamp: ${evt.timestamp.toISOString()}\n`;
+        reportText += `Severity: ${evt.severity}\n`;
+        reportText += `Category: ${evt.category}\n`;
+        reportText += `Title: ${evt.title}\n`;
+        reportText += `Source: ${evt.source_ip} | Target: ${evt.target}\n`;
+        reportText += `MITRE Tactic: ${evt.mitre || 'N/A'}\n`;
+        reportText += `Raw Log: ${evt.raw_log}\n`;
+        reportText += `AI Threat Analysis: ${evt.ai_summary}\n`;
+        reportText += `--------------------------------------------------------\n\n`;
+      });
+
+      const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `SENTRI-threat-report-${Date.now()}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+
+    // SIMULATED LIVE STREAM EVENTS TICKER (Add benign noise every 45s)
+    const NOISE_TEMPLATES = [
+      {
+        category: "NETWORK",
+        title: "DNS lookup anomaly — unusual domain queried",
+        ip: "10.0.1.18",
+        target: "dns-resolver.internal",
+        log: "DNS Query: 10.0.1.18 -> raw-packet-mirror-server[.]ru | Type: TXT",
+        summary: "Benign noise event. An internal host queried an external DNS text record. Although resolving to an unfamiliar domain, telemetry suggests this is a normal check for a legacy software component. FP: 96%."
+      },
+      {
+        category: "SYS",
+        title: "CPU spike on analytics node",
+        ip: "10.0.3.15",
+        target: "analytics-worker-04",
+        log: "SYS WARN: CPU core 8 usage 98.4% for 180s | Process: python3 core_aggregator.py",
+        summary: "Resource warning. Analytics worker Node 4 experienced high CPU load during aggregation routines. No indicators of threat or compromise. FP: 99%."
+      },
+      {
+        category: "AUTH",
+        title: "SSH session login — system administrator",
+        ip: "192.168.12.44",
+        target: "bastion-host.internal",
+        log: "Accepted publickey for sys-ops from 192.168.12.44 port 48924 ssh2: RSA SHA256:...",
+        summary: "Normal administrative access. System operator authenticated successfully via bastion host using registered public key authentication. IP resides within local VPN range. FP: 98%."
+      },
+      {
+        category: "NETWORK",
+        title: "NTP time synch failure",
+        ip: "10.0.0.4",
+        target: "time.nist.gov",
+        log: "NTP socket error: Timeout on connection pool socket to time.nist.gov | Retry 1/3",
+        summary: "Network time error. Host time sync timed out. No anomalous packets detected. This is a common latency fluctuation. FP: 99%."
+      }
+    ];
+
+    let noiseIndex = 0;
+    let eventIdCounter = 4489;
+
+    function runLiveSimulation() {
+      const template = NOISE_TEMPLATES[noiseIndex];
+      noiseIndex = (noiseIndex + 1) % NOISE_TEMPLATES.length;
+
+      const newEvent = {
+        id: `EVT-${eventIdCounter++}`,
+        timestamp: new Date(),
+        severity: "LOW",
+        category: template.category,
+        title: template.title,
+        source_ip: template.ip,
+        source_geo: { country: "INTERNAL", city: "—", lat: 0, lng: 0 },
+        target: template.target,
+        raw_log: template.log,
+        ai_summary: `${template.summary} RECOMMENDED: No response action required. Logging for historical telemetry records.`,
+        mitre: null,
+        false_positive_probability: "98%",
+        related_events: []
+      };
+
+      // Add to front of array
+      eventsArray.unshift(newEvent);
+      
+      // Re-render feed and update counter stats
+      renderThreatFeed();
+      updateStatsCounters();
+      
+      // Scroll to top smoothly to show the new alert
+      feedContainer.scrollTop = 0;
+    }
+
+    // Launch ticker
+    setInterval(runLiveSimulation, 45000);
+
+    // ==========================================
+    // CHART.JS IMPLEMENTATION
+    // ==========================================
+    let chartInstance = null;
+    function renderStatsChart() {
+      const ctx = document.getElementById('timeline-chart').getContext('2d');
+      
+      const config = {
+        type: 'line',
+        data: {
+          labels: ['-5h', '-4h', '-3h', '-2h', '-1h', 'Now'],
+          datasets: [{
+            label: 'Threat Intensity',
+            data: [2, 1, 15, 3, 2, 4], // Dramatic spike at -3 hours
+            borderColor: '#00D4FF',
+            borderWidth: 2,
+            backgroundColor: 'rgba(0, 212, 255, 0.05)',
+            fill: true,
+            tension: 0.4,
+            pointBackgroundColor: (context) => {
+              // Highlight the spike point
+              const index = context.dataIndex;
+              return index === 2 ? '#FF2D55' : '#00D4FF';
+            },
+            pointBorderColor: (context) => {
+              const index = context.dataIndex;
+              return index === 2 ? '#FF2D55' : '#00D4FF';
+            },
+            pointRadius: (context) => {
+              const index = context.dataIndex;
+              return index === 2 ? 6 : 4;
+            },
+            pointHoverRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: {
+            padding: {
+              bottom: 12,
+              left: 4,
+              right: 4,
+              top: 4
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#0D1526',
+              titleFont: { family: 'Rajdhani', weight: 'bold' },
+              bodyFont: { family: 'JetBrains Mono' },
+              borderColor: '#1E3A5F',
+              borderWidth: 1,
+              callbacks: {
+                label: function(context) {
+                  return ` Alerts: ${context.parsed.y}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(26, 37, 64, 0.4)' },
+              ticks: {
+                color: '#7A8BA8',
+                font: { family: 'Rajdhani', size: 10 }
+              }
+            },
+            y: {
+              grid: { color: 'rgba(26, 37, 64, 0.4)' },
+              ticks: {
+                color: '#7A8BA8',
+                font: { family: 'Rajdhani', size: 10 },
+                stepSize: 5
+              },
+              suggestedMax: 18
+            }
+          }
+        }
+      };
+
+      chartInstance = new Chart(ctx, config);
+    }
+
+    // ==========================================
+    // D3.JS GEOGRAPHIC MAP DRAWING
+    // ==========================================
+    function initGeographicMap() {
+      const svg = d3.select("#geomap-svg");
+      
+      // Clear geographic map prior to draw
+      svg.selectAll("*").remove();
+
+      // Grid lines
+      const grid = svg.append("g")
+                      .attr("stroke", "var(--border-dim)")
+                      .attr("stroke-width", 0.5)
+                      .attr("stroke-dasharray", "1 3");
+                      
+      for (let y = 20; y < 100; y += 20) {
+        grid.append("line").attr("x1", 0).attr("y1", y).attr("x2", 240).attr("y2", y);
+      }
+      for (let x = 40; x < 240; x += 40) {
+        grid.append("line").attr("x1", x).attr("y1", 0).attr("x2", x).attr("y2", 100);
+      }
+
+      // Continents paths
+      const continents = [
+        "M 15 15 L 60 15 L 50 45 L 30 50 L 15 35 Z",
+        "M 35 50 L 50 50 L 42 85 L 35 85 Z",
+        "M 70 12 L 190 12 L 180 50 L 120 55 L 75 48 L 70 25 Z",
+        "M 75 48 L 105 48 L 105 75 L 85 85 L 75 65 Z",
+        "M 170 65 L 195 65 L 190 80 L 170 80 Z"
+      ];
+      
+      svg.append("g")
+         .attr("fill", "rgba(30, 58, 95, 0.03)")
+         .attr("stroke", "var(--border-glow)")
+         .attr("stroke-width", 0.8)
+         .selectAll("path")
+         .data(continents)
+         .enter()
+         .append("path")
+         .attr("d", d => d);
+
+      // Attack flows
+      const paths = [
+        "M 110 20 Q 77 15 45 32",
+        "M 95 22 Q 70 20 45 32"
+      ];
+      
+      svg.append("g")
+         .selectAll("path")
+         .data(paths)
+         .enter()
+         .append("path")
+         .attr("class", "map-connection")
+         .attr("d", d => d)
+         .attr("fill", "none")
+         .attr("stroke", "var(--critical)")
+         .attr("stroke-width", 1.2);
+
+      // Points & Labels data
+      const points = [
+        { cx: 110, cy: 20, r: 3.5, color: "var(--critical)", pulse: "ping-ring" },
+        { cx: 95, cy: 22, r: 3.5, color: "var(--critical)", pulse: "ping-ring" },
+        { cx: 45, cy: 32, r: 4.5, color: "var(--info)", pulse: "ping-ring-blue" }
+      ];
+
+      const pGroup = svg.append("g");
+      
+      // Pulsing rings
+      pGroup.selectAll("circle.ping")
+            .data(points)
+            .enter()
+            .append("circle")
+            .attr("cx", d => d.cx)
+            .attr("cy", d => d.cy)
+            .attr("r", 8)
+            .attr("fill", "none")
+            .attr("stroke", d => d.color)
+            .attr("stroke-width", 1)
+            .attr("class", d => d.pulse);
+
+      // Static dots
+      pGroup.selectAll("circle.dot")
+            .data(points)
+            .enter()
+            .append("circle")
+            .attr("cx", d => d.cx)
+            .attr("cy", d => d.cy)
+            .attr("r", d => d.r)
+            .attr("fill", d => d.color)
+            .attr("stroke", "var(--bg-surface)")
+            .attr("stroke-width", 1);
+
+      // Map labels
+      const labels = [
+        { x: 115, y: 16, text: "MOSCOW (RU)", color: "var(--text-secondary)" },
+        { x: 75, y: 14, text: "AMSTERDAM (NL)", color: "var(--text-secondary)" },
+        { x: 25, y: 42, text: "YOUR INFRASTRUCTURE", color: "var(--text-mono)" }
+      ];
+
+      svg.append("g")
+         .selectAll("text")
+         .data(labels)
+         .enter()
+         .append("text")
+         .attr("x", d => d.x)
+         .attr("y", d => d.y)
+         .attr("fill", d => d.color)
+         .attr("font-size", 7)
+         .attr("font-family", "var(--font-display)")
+         .attr("font-weight", 600)
+         .text(d => d.text);
+    }
+
+    // ==========================================
+    // D3.JS FORCE DIRECTED ATTACK GRAPH
+    // ==========================================
+    let simulation, svgGroup, zoomBehavior;
+    
+    function initAttackGraph() {
+      const container = document.getElementById('attack-graph-wrapper');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      
+      const svg = d3.select("#attack-chain-svg")
+                    .attr("viewBox", `0 0 ${width} ${height}`);
+
+      // Clean SVG prior to draw
+      svg.selectAll("*").remove();
+
+      // Definitions for arrows
+      const defs = svg.append("defs");
+      const colors = { auth: "#38BDF8", lateral: "#FF6B1A", exfil: "#FF2D55" };
+      Object.keys(colors).forEach(key => {
+        defs.append("marker")
+            .attr("id", `arrow-${key}`)
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 22)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-4L10,0L0,4")
+            .attr("fill", colors[key]);
+      });
+
+      // SVG Group to allow zooming/panning transformations uniformly
+      svgGroup = svg.append("g").attr("class", "zoom-container");
+
+      // Bind D3 zoom behavior
+      zoomBehavior = d3.zoom()
+                       .scaleExtent([0.3, 3])
+                       .on("zoom", (event) => {
+                         svgGroup.attr("transform", event.transform);
+                       });
+      svg.call(zoomBehavior);
+
+      // Graph model definitions
+      const nodes = [
+        { id: "185.220.101.47", label: "185.220.101.47 (Attacker RU / C2)", type: "attacker", compromised: true },
+        { id: "91.108.4.45", label: "91.108.4.45 (Attacker NL)", type: "attacker", compromised: true },
+        { id: "auth-service.prod", label: "auth-service.prod", type: "internal", compromised: true },
+        { id: "10.0.1.15", label: "10.0.1.15 (Host)", type: "internal", compromised: true },
+        { id: "payments-api.internal", label: "payments-api.internal", type: "internal", compromised: true },
+        { id: "185.220.101.89", label: "185.220.101.89 (Tor Exfil)", type: "exfil", compromised: true },
+        { id: "DATABASE", label: "DATABASE (Payments DB)", type: "datastore", compromised: true },
+        { id: "10.0.2.22", label: "10.0.2.22 (Host)", type: "internal", compromised: true },
+        { id: "ci-cd.internal", label: "ci-cd.internal", type: "internal", compromised: true },
+        { id: "backup-srv-01.internal", label: "backup-srv-01.internal", type: "exfil", compromised: true }, 
+        { id: "SECRETS VAULT", label: "SECRETS VAULT", type: "datastore", compromised: true }
+      ];
+
+      const links = [
+        { source: "185.220.101.47", target: "auth-service.prod", type: "auth", tactic: "Initial Access (T1110)" },
+        { source: "91.108.4.45", target: "auth-service.prod", type: "auth", tactic: "Initial Access (T1078)" },
+        { source: "auth-service.prod", target: "10.0.1.15", type: "lateral", tactic: "Lateral Movement" },
+        { source: "10.0.1.15", target: "payments-api.internal", type: "lateral", tactic: "Lateral Movement (T1021)" },
+        { source: "10.0.1.15", target: "185.220.101.89", type: "exfil", tactic: "Exfiltration (T1048)" },
+        { source: "payments-api.internal", target: "DATABASE", type: "lateral", tactic: "Data Access" },
+        { source: "10.0.2.22", target: "ci-cd.internal", type: "lateral", tactic: "Discovery (T1552)" },
+        { source: "10.0.2.22", target: "backup-srv-01.internal", type: "lateral", tactic: "Lateral Movement (T1490)" },
+        { source: "10.0.2.22", target: "185.220.101.47", type: "exfil", tactic: "Command & Control (T1071)" },
+        { source: "ci-cd.internal", target: "SECRETS VAULT", type: "lateral", tactic: "Access Secrets" }
+      ];
+
+      // Simulation physics configuration
+      simulation = d3.forceSimulation(nodes)
+                     .force("link", d3.forceLink(links).id(d => d.id).distance(width > 600 ? 110 : 80))
+                     .force("charge", d3.forceManyBody().strength(-180))
+                     .force("center", d3.forceCenter(width / 2, height / 2))
+                     .force("collision", d3.forceCollide().radius(30))
+                     .alphaDecay(0.015);
+
+      // Build linkages inside SVG Group
+      const link = svgGroup.append("g")
+                           .selectAll("line")
+                           .data(links)
+                           .enter()
+                           .append("line")
+                           .attr("class", "graph-edge")
+                           .attr("stroke", d => colors[d.type])
+                           .attr("stroke-width", 1.5)
+                           .attr("marker-end", d => `url(#arrow-${d.type})`);
+
+      // Overlay text for tactic on hover inside SVG Group
+      const linkLabel = svgGroup.append("g")
+                                .selectAll("text")
+                                .data(links)
+                                .enter()
+                                .append("text")
+                                .attr("class", "edge-label")
+                                .attr("font-family", "var(--font-mono)")
+                                .attr("font-size", "7px")
+                                .attr("fill", "var(--text-secondary)")
+                                .attr("text-anchor", "middle")
+                                .attr("dy", -4)
+                                .style("opacity", 0)
+                                .text(d => d.tactic);
+
+      // Invisible wider link for easier hover capture inside SVG Group
+      const linkHover = svgGroup.append("g")
+                                .selectAll("line")
+                                .data(links)
+                                .enter()
+                                .append("line")
+                                .attr("stroke", "transparent")
+                                .attr("stroke-width", 10)
+                                .attr("cursor", "pointer")
+                                .on("mouseover", function(event, d) {
+                                  linkLabel.filter(l => l === d).style("opacity", 1);
+                                  d3.select(link.nodes()[links.indexOf(d)]).attr("stroke-width", 3.0);
+                                })
+                                .on("mouseout", function(event, d) {
+                                  linkLabel.filter(l => l === d).style("opacity", 0);
+                                  d3.select(link.nodes()[links.indexOf(d)]).attr("stroke-width", 1.5);
+                                });
+
+      // Tooltip node refs
+      const tooltip = document.getElementById('graph-tooltip');
+
+      // Drag mechanics
+      function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.2).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+      function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+      }
+      function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      }
+
+      // Draw custom nodes inside SVG Group
+      const node = svgGroup.append("g")
+                           .selectAll("g")
+                           .data(nodes)
+                           .enter()
+                           .append("g")
+                           .attr("class", "graph-node")
+                           .call(d3.drag()
+                                   .on("start", dragstarted)
+                                   .on("drag", dragged)
+                                   .on("end", dragended));
+
+      // Append custom node shapes
+      node.each(function(d) {
+        const el = d3.select(this);
+        if(d.compromised) {
+          el.append("circle")
+            .attr("r", 15)
+            .attr("fill", "none")
+            .attr("stroke", "var(--critical)")
+            .attr("stroke-width", 1)
+            .attr("class", "node-pulse-crit");
+        }
+
+        if(d.type === "attacker") {
+          el.append("polygon")
+            .attr("points", "0,-12 10.4,-6 10.4,6 0,12 -10.4,6 -10.4,-6")
+            .attr("fill", "var(--critical)")
+            .attr("stroke", "var(--critical)")
+            .attr("stroke-width", 1.5);
+        } 
+        else if(d.type === "datastore") {
+          el.append("path")
+            .attr("d", "M-10,-12 C-10,-15 10,-15 10,-12 L10,10 C10,13 -10,13 -10,10 Z")
+            .attr("fill", "var(--medium)")
+            .attr("stroke", "var(--medium)")
+            .attr("stroke-width", 1.5);
+          el.append("ellipse")
+            .attr("cx", 0)
+            .attr("cy", -12)
+            .attr("rx", 10)
+            .attr("ry", 3)
+            .attr("fill", "var(--bg-surface)")
+            .attr("stroke", "var(--medium)")
+            .attr("stroke-width", 1);
+        } 
+        else if(d.type === "exfil") {
+          el.append("polygon")
+            .attr("points", "0,-13 12,9 -12,9")
+            .attr("fill", "var(--high)")
+            .attr("stroke", "var(--high)")
+            .attr("stroke-width", 1.5);
+        }
+        else {
+          el.append("circle")
+            .attr("r", 10)
+            .attr("fill", "var(--bg-elevated)")
+            .attr("stroke", d.compromised ? "var(--critical)" : "var(--border-glow)")
+            .attr("stroke-width", d.compromised ? 2 : 1.5);
+        }
+      });
+
+      // Text Labels
+      node.append("text")
+          .attr("y", 24)
+          .attr("class", "node-text")
+          .text(d => d.id);
+
+      // Node Interactions
+      node.on("mouseover", function(event, d) {
+        d3.select(this).select("circle, polygon, path")
+                       .attr("stroke", "var(--accent-electric)");
+
+        const relEvents = eventsArray.filter(e => e.source_ip === d.id || e.target.includes(d.id));
+        tooltip.style.opacity = 1;
+        tooltip.innerHTML = `
+          <div class="tooltip-title">${d.label}</div>
+          <div class="tooltip-row">Type: <span>${d.type.toUpperCase()}</span></div>
+          <div class="tooltip-row">Status: <span style="color: ${d.compromised ? 'var(--critical)' : 'var(--low)'}">${d.compromised ? 'COMPROMISED' : 'SECURE'}</span></div>
+          <div class="tooltip-row">Linked Alerts: <span>${relEvents.length}</span></div>
+        `;
+      })
+      .on("mousemove", function(event) {
+        const offsetLeft = container.getBoundingClientRect().left;
+        const offsetTop = container.getBoundingClientRect().top;
+        tooltip.style.left = `${event.clientX - offsetLeft + 15}px`;
+        tooltip.style.top = `${event.clientY - offsetTop + 15}px`;
+      })
+      .on("mouseout", function(event, d) {
+        d3.select(this).select("circle, polygon, path")
+                       .attr("stroke", d.compromised ? "var(--critical)" : (d.type === "attacker" ? "var(--critical)" : (d.type === "exfil" ? "var(--high)" : (d.type === "datastore" ? "var(--medium)" : "var(--border-glow)"))));
+        tooltip.style.opacity = 0;
+      })
+      .on("click", function(event, d) {
+        event.stopPropagation();
+        nodeFilter = d.id;
+        renderThreatFeed();
+        highlightGraphNode(d.id, d.id);
+      });
+
+      // Physics tick event updates
+      simulation.on("tick", () => {
+        link.attr("x1", d => d.source.x)
+            .attr("y1", d => d.source.y)
+            .attr("x2", d => d.target.x)
+            .attr("y2", d => d.target.y);
+
+        linkHover.attr("x1", d => d.source.x)
+                 .attr("y1", d => d.source.y)
+                 .attr("x2", d => d.target.x)
+                 .attr("y2", d => d.target.y);
+
+        linkLabel.attr("x", d => (d.source.x + d.target.x) / 2)
+                 .attr("y", d => (d.source.y + d.target.y) / 2);
+
+        node.attr("transform", d => `translate(${d.x}, ${d.y})`);
+      });
+    }
+
+    // Graph Resize Centering Hook
+    function resizeGraph() {
+      const container = document.getElementById('attack-graph-wrapper');
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      
+      const svg = d3.select("#attack-chain-svg")
+                    .attr("viewBox", `0 0 ${w} ${h}`);
+                    
+      if(simulation) {
+        simulation.force("center", d3.forceCenter(w / 2, h / 2));
+        simulation.alpha(0.3).restart();
+      }
+    }
+    
+    window.addEventListener("resize", resizeGraph);
+
+    // Initialization hook
+    window.addEventListener('DOMContentLoaded', () => {
+      // 1. Initial Feed Render
+      renderThreatFeed();
+      updateStatsCounters();
+
+      // 2. Load D3 Geographic Map
+      initGeographicMap();
+
+      // 3. Load D3 Physics Graph
+      initAttackGraph();
+
+      // 4. Load Timeline Chart (Chart.js)
+      renderStatsChart();
+
+      // 5. Default Select first critical alert card
+      selectEvent("EVT-4488");
+
+      // 6. Maximize graph button triggers
+      const maximizeBtn = document.getElementById('graph-maximize-btn');
+      const graphBlock = document.querySelector('.attack-graph-block');
+      let isGraphMaximized = false;
+
+      maximizeBtn.addEventListener('click', () => {
+        isGraphMaximized = !isGraphMaximized;
+        if(isGraphMaximized) {
+          graphBlock.classList.add('maximized');
+          maximizeBtn.textContent = '⧉ RESTORE';
+          maximizeBtn.style.borderColor = 'var(--critical)';
+          maximizeBtn.style.color = 'var(--critical)';
+        } else {
+          graphBlock.classList.remove('maximized');
+          maximizeBtn.textContent = '⛶ FULL VIEW';
+          maximizeBtn.style.borderColor = 'var(--border-glow)';
+          maximizeBtn.style.color = 'var(--accent-electric)';
+        }
+        
+        // Trigger resize and re-centering D3 physics forces
+        setTimeout(resizeGraph, 50);
+      });
+    });
+  </script>
+</body>
+</html>
