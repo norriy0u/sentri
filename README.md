@@ -97,16 +97,16 @@ cd sentri
 ```
 
 ### Launch the Application
-Simply double-click `sentri.html` to open it in your browser, or launch it via the terminal:
+Simply double-click `index.html` to open it in your browser, or launch it via the terminal:
 
 **Windows PowerShell:**
 ```powershell
-Start-Process sentri.html
+Start-Process index.html
 ```
 
 **macOS/Linux Terminal:**
 ```bash
-open sentri.html
+open index.html
 ```
 
 ---
